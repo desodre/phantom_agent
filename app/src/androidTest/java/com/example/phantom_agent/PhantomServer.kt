@@ -7,6 +7,7 @@ import androidx.test.uiautomator.UiSelector
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.ByteArrayOutputStream
+import java.io.BufferedOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.ServerSocket
@@ -24,11 +25,23 @@ class PhantomServer {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val device = UiDevice.getInstance(instrumentation)
     val clientExecutor = Executors.newCachedThreadPool()
+    val videoServerExecutor = Executors.newSingleThreadExecutor()
+
+    videoServerExecutor.execute { startVideoServer(clientExecutor) }
 
     ServerSocket(PORT).use { serverSocket ->
       while (true) {
         val clientSocket = serverSocket.accept()
         clientExecutor.execute { handleClient(clientSocket, device) }
+      }
+    }
+  }
+
+  private fun startVideoServer(clientExecutor: java.util.concurrent.ExecutorService) {
+    ServerSocket(VIDEO_PORT).use { videoServerSocket ->
+      while (true) {
+        val videoClientSocket = videoServerSocket.accept()
+        clientExecutor.execute { handleVideoClient(videoClientSocket) }
       }
     }
   }
@@ -83,7 +96,45 @@ class PhantomServer {
     }
   }
 
+  private fun handleVideoClient(clientSocket: Socket) {
+    var process: Process? = null
+    var stderrThread: Thread? = null
+
+    try {
+      process =
+        Runtime.getRuntime()
+          .exec("screenrecord --output-format=h264 --bit-rate 4000000 --size 720x1280 -")
+
+      stderrThread = Thread {
+        val drainBuffer = ByteArray(1024)
+        process.errorStream.use { errorStream ->
+          while (errorStream.read(drainBuffer) != -1) {
+            // Drain stderr to avoid blocking screenrecord due to full error pipe.
+          }
+        }
+      }
+      stderrThread.isDaemon = true
+      stderrThread.start()
+
+      val buffer = ByteArray(16 * 1024)
+      process.inputStream.use { processOutput ->
+        BufferedOutputStream(clientSocket.getOutputStream()).use { socketOutput ->
+          while (true) {
+            val bytesRead = processOutput.read(buffer)
+            if (bytesRead == -1) break
+            socketOutput.write(buffer, 0, bytesRead)
+          }
+        }
+      }
+    } finally {
+      process?.destroy()
+      stderrThread?.interrupt()
+      runCatching { clientSocket.close() }
+    }
+  }
+
   private companion object {
     const val PORT = 9008
+    const val VIDEO_PORT = 9009
   }
 }
