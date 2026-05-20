@@ -1,5 +1,6 @@
 package com.example.phantom_agent
 
+import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -29,7 +30,9 @@ class PhantomServer {
 
     videoServerExecutor.execute { startVideoServer(clientExecutor) }
 
-    ServerSocket(PORT).use { serverSocket ->
+    ServerSocket(0).use { serverSocket ->
+      val commandPort = serverSocket.localPort
+      Log.i("PhantomServer", "COMMAND_PORT_ALLOCATED: $commandPort")
       while (true) {
         val clientSocket = serverSocket.accept()
         clientExecutor.execute { handleClient(clientSocket, device) }
@@ -38,7 +41,9 @@ class PhantomServer {
   }
 
   private fun startVideoServer(clientExecutor: java.util.concurrent.ExecutorService) {
-    ServerSocket(VIDEO_PORT).use { videoServerSocket ->
+    ServerSocket(0).use { videoServerSocket ->
+      val videoPort = videoServerSocket.localPort
+      Log.i("PhantomServer", "VIDEO_PORT_ALLOCATED: $videoPort")
       while (true) {
         val videoClientSocket = videoServerSocket.accept()
         clientExecutor.execute { handleVideoClient(videoClientSocket) }
@@ -133,8 +138,4 @@ class PhantomServer {
     }
   }
 
-  private companion object {
-    const val PORT = 9008
-    const val VIDEO_PORT = 9009
-  }
 }

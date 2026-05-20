@@ -44,13 +44,18 @@ Executar um único teste:
 
 ## Como usar o PhantomServer (TCP + JSON)
 
-O `PhantomServer` é um teste instrumentado que abre um `ServerSocket` na porta `9008` dentro do dispositivo e processa comandos JSON linha a linha.
+O `PhantomServer` é um teste instrumentado que abre `ServerSocket`s em portas dinâmicas (porta `0`) dentro do dispositivo e processa comandos JSON linha a linha.
+As portas reais são publicadas no Logcat com:
+- `COMMAND_PORT_ALLOCATED: <porta>`
+- `VIDEO_PORT_ALLOCATED: <porta>`
 
 ### 1. Preparar dispositivo
 
 ```bash
 adb devices
-adb reverse tcp:9008 tcp:9008
+# obter as portas no logcat e aplicar reverse para a porta de comando
+adb logcat -s PhantomServer:I
+adb reverse tcp:<command_port> tcp:<command_port>
 ```
 
 ### 2. Iniciar o servidor no dispositivo
@@ -69,8 +74,8 @@ Cada requisição deve ser um JSON válido terminado por `\n`.
 Exemplo com `nc`:
 
 ```bash
-echo '{"action":"dumpWindow"}' | nc 127.0.0.1 9008
-echo '{"action":"clickByText","text":"OK"}' | nc 127.0.0.1 9008
+echo '{"action":"dumpWindow"}' | nc 127.0.0.1 <command_port>
+echo '{"action":"clickByText","text":"OK"}' | nc 127.0.0.1 <command_port>
 ```
 
 ## Protocolo JSON suportado
